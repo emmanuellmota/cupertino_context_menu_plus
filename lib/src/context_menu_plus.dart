@@ -219,6 +219,7 @@ class CupertinoContextMenuPlus extends StatefulWidget {
     this.growAnimationBoxShadow = kEndBoxShadow,
     this.previewLongPressTimeout = kDefaultPreviewLongPressTimeout,
     this.menuItemSpacing = _kDefaultMenuItemSpacing,
+    this.enableDragToDismiss = true,
   }) : assert(actions.isNotEmpty || bottomWidgetBuilder != null),
        assert(modalTransitionDuration > Duration.zero),
        assert(modalReverseTransitionDuration > Duration.zero),
@@ -257,6 +258,7 @@ class CupertinoContextMenuPlus extends StatefulWidget {
     this.growAnimationBoxShadow = kEndBoxShadow,
     this.previewLongPressTimeout = kDefaultPreviewLongPressTimeout,
     this.menuItemSpacing = _kDefaultMenuItemSpacing,
+    this.enableDragToDismiss = true,
   }) : assert(actions.isNotEmpty || bottomWidgetBuilder != null),
        assert(modalTransitionDuration > Duration.zero),
        assert(modalReverseTransitionDuration > Duration.zero),
@@ -612,6 +614,15 @@ class CupertinoContextMenuPlus extends StatefulWidget {
   /// Defaults to 20.0.
   final double menuItemSpacing;
 
+  /// Whether the preview can be dragged to dismiss when the context menu is
+  /// open.
+  ///
+  /// When true (the default), the user can drag the preview downward to
+  /// dismiss the menu. When false, the preview stays fixed in place and can
+  /// only be dismissed by tapping the background or calling
+  /// `Navigator.pop`.
+  final bool enableDragToDismiss;
+
   @override
   State<CupertinoContextMenuPlus> createState() => _CupertinoContextMenuPlusState();
 }
@@ -866,6 +877,7 @@ class _CupertinoContextMenuPlusState extends State<CupertinoContextMenuPlus> wit
       actionsBackgroundColor: widget.actionsBackgroundColor,
       actionsBorderRadius: widget.actionsBorderRadius,
       menuItemSpacing: widget.menuItemSpacing,
+      enableDragToDismiss: widget.enableDragToDismiss,
       builder: (BuildContext context, Animation<double> animation) {
         if (widget.child == null) {
           final double animationOpensAt = _animationOpensAt;
@@ -1203,6 +1215,7 @@ class _ContextMenuRoute<T> extends PopupRoute<T> {
     Color? actionsBackgroundColor,
     BorderRadius? actionsBorderRadius,
     required double menuItemSpacing,
+    required bool enableDragToDismiss,
   }) : assert(actions.isNotEmpty || bottomWidgetBuilder != null),
        assert(backdropBlurSigma >= 0.0),
        assert(transitionDuration > Duration.zero),
@@ -1223,7 +1236,8 @@ class _ContextMenuRoute<T> extends PopupRoute<T> {
        _reverseTransitionDuration = reverseTransitionDuration,
        _actionsBackgroundColor = actionsBackgroundColor,
        _actionsBorderRadius = actionsBorderRadius,
-       _menuItemSpacing = menuItemSpacing;
+       _menuItemSpacing = menuItemSpacing,
+       _enableDragToDismiss = enableDragToDismiss;
 
   final List<Widget> _actions;
   final WidgetBuilder? _bottomWidgetBuilder;
@@ -1250,6 +1264,7 @@ class _ContextMenuRoute<T> extends PopupRoute<T> {
   final Color? _actionsBackgroundColor;
   final BorderRadius? _actionsBorderRadius;
   final double _menuItemSpacing;
+  final bool _enableDragToDismiss;
 
   Rect get _childRectForLayout {
     if (_contextMenuLocation == _ContextMenuLocation.none && _previousChildRectWasScaled) {
@@ -1524,6 +1539,7 @@ class _ContextMenuRoute<T> extends PopupRoute<T> {
                 actionsBackgroundColor: _actionsBackgroundColor,
                 actionsBorderRadius: _actionsBorderRadius,
                 menuItemSpacing: _menuItemSpacing,
+                enableDragToDismiss: _enableDragToDismiss,
                 child: _builder(context, animation),
               ),
             ),
@@ -1589,6 +1605,7 @@ class _ContextMenuRoute<T> extends PopupRoute<T> {
             actionsBackgroundColor: _actionsBackgroundColor,
             actionsBorderRadius: _actionsBorderRadius,
             menuItemSpacing: _menuItemSpacing,
+            enableDragToDismiss: _enableDragToDismiss,
             child: _builder(context, animation),
           );
         }
@@ -1624,6 +1641,7 @@ class _ContextMenuRouteStatic extends StatefulWidget {
     this.actionsBackgroundColor,
     this.actionsBorderRadius,
     required this.menuItemSpacing,
+    this.enableDragToDismiss = true,
   });
 
   final List<Widget>? actions;
@@ -1640,6 +1658,7 @@ class _ContextMenuRouteStatic extends StatefulWidget {
   final Color? actionsBackgroundColor;
   final BorderRadius? actionsBorderRadius;
   final double menuItemSpacing;
+  final bool enableDragToDismiss;
 
   @override
   _ContextMenuRouteStaticState createState() => _ContextMenuRouteStaticState();
@@ -1842,15 +1861,12 @@ class _ContextMenuRouteStaticState extends State<_ContextMenuRouteStatic> with T
   Widget build(BuildContext context) {
     final Widget child = _getChild(widget.orientation, widget.contextMenuLocation);
 
+    final Widget content = AnimatedBuilder(animation: _moveController, builder: _buildAnimation, child: child);
+
     return SafeArea(
       child: Align(
         alignment: Alignment.topLeft,
-        child: GestureDetector(
-          onPanEnd: _onPanEnd,
-          onPanStart: _onPanStart,
-          onPanUpdate: _onPanUpdate,
-          child: AnimatedBuilder(animation: _moveController, builder: _buildAnimation, child: child),
-        ),
+        child: widget.enableDragToDismiss ? GestureDetector(onPanEnd: _onPanEnd, onPanStart: _onPanStart, onPanUpdate: _onPanUpdate, child: content) : content,
       ),
     );
   }
