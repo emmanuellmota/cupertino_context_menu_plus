@@ -2081,10 +2081,18 @@ class _ContextMenuAlignedChildrenDelegate extends MultiChildLayoutDelegate {
 
     double alignAndClamp(double childPos, double childSize, double itemSize, double minEdge, double maxEdge) {
       // Determine alignment based on child's position on screen:
-      // if child center is on the right half, right-align; otherwise left-align.
+      // if child center is clearly on the right half, right-align; otherwise
+      // prefer left-align (default). A threshold prevents inconsistency when
+      // the child spans most of the screen width and its center is near the
+      // screen center.
       final double childCenter = childPos + childSize / 2;
       final double screenCenter = (minEdge + maxEdge) / 2;
-      final bool alignRight = childCenter > screenCenter;
+      final double availableWidth = maxEdge - minEdge;
+      // Only right-align when the child center is clearly past the screen
+      // center. The threshold ensures wide items that span most of the width
+      // consistently left-align.
+      final double threshold = availableWidth * 0.05;
+      final bool alignRight = childCenter > screenCenter + threshold;
 
       double alignedPos = alignRight ? childPos + childSize - itemSize : childPos;
       if (alignedPos + itemSize > maxEdge) {
