@@ -2004,12 +2004,14 @@ class _ContextMenuAlignedChildrenDelegate extends MultiChildLayoutDelegate {
   void performLayout(Size size) {
     final BoxConstraints constraints = BoxConstraints.loose(size);
 
+    // For explicitly set locations (left/right/center), always use portrait-style
+    // layout (menu below child) regardless of actual orientation. Landscape
+    // side-by-side layout only applies for 'none' location in actual landscape.
+    final bool usePortraitLayout = orientation == Orientation.portrait || contextMenuLocation != _ContextMenuLocation.none;
+
     final double availableHeightForChild = screenBounds.height - _ContextMenuRouteStaticState._kPadding;
     final double availableWidth = screenBounds.width - _ContextMenuRouteStaticState._kPadding * 2;
-    final double availableWidthForChild = switch (orientation) {
-      Orientation.portrait => availableWidth,
-      Orientation.landscape => availableWidth - _ContextMenuSheetState._kMenuMaxWidth,
-    };
+    final double availableWidthForChild = usePortraitLayout ? availableWidth : availableWidth - _ContextMenuSheetState._kMenuMaxWidth;
     assert(availableWidthForChild >= 0.0);
     assert(availableHeightForChild >= 0.0);
 
@@ -2027,12 +2029,11 @@ class _ContextMenuAlignedChildrenDelegate extends MultiChildLayoutDelegate {
     }
     final Size childSize = layoutChild(_ContextMenuChild.child, childConstraints);
 
-    // In portrait orientation, the child is atop the menu, while in landscape
-    // orientation, the child is beside the menu.
-    final double availableHeightForMenu = switch (orientation) {
-      Orientation.portrait => availableHeightForChild - topWidgetHeight - (childSize.height + menuItemSpacing),
-      Orientation.landscape => availableHeightForChild - topWidgetHeight,
-    };
+    // In portrait layout, the child is atop the menu, while in landscape
+    // layout, the child is beside the menu.
+    final double availableHeightForMenu = usePortraitLayout
+        ? availableHeightForChild - topWidgetHeight - (childSize.height + menuItemSpacing)
+        : availableHeightForChild - topWidgetHeight;
 
     final Size menuSize = layoutChild(_ContextMenuChild.menuSheet, constraints.copyWith(maxHeight: availableHeightForMenu));
 
@@ -2043,29 +2044,28 @@ class _ContextMenuAlignedChildrenDelegate extends MultiChildLayoutDelegate {
     final double initialChildTop;
     final double maxClampedLeft;
     final double maxClampedTop;
-    switch (orientation) {
-      case Orientation.portrait:
-        final double totalHeight = topWidgetHeight + childSize.height + menuSize.height + menuItemSpacing;
-        final double totalWidth = maxWidth + _ContextMenuRouteStaticState._kPadding;
+    if (usePortraitLayout) {
+      final double totalHeight = topWidgetHeight + childSize.height + menuSize.height + menuItemSpacing;
+      final double totalWidth = maxWidth + _ContextMenuRouteStaticState._kPadding;
 
-        // Align based on context menu location
-        initialChildLeft = switch (contextMenuLocation) {
-          _ContextMenuLocation.left => targetRect.left,
-          _ContextMenuLocation.right => targetRect.right - maxWidth,
-          _ContextMenuLocation.center => targetRect.center.dx - maxWidth / 2,
-          _ContextMenuLocation.none => targetRect.left - padding.left,
-        };
-        initialChildTop = contextMenuLocation == _ContextMenuLocation.none ? targetRect.top - padding.top : targetRect.center.dy - childSize.height + topWidgetHeight;
+      // Align based on context menu location
+      initialChildLeft = switch (contextMenuLocation) {
+        _ContextMenuLocation.left => targetRect.left,
+        _ContextMenuLocation.right => targetRect.right - maxWidth,
+        _ContextMenuLocation.center => targetRect.center.dx - maxWidth / 2,
+        _ContextMenuLocation.none => targetRect.left - padding.left,
+      };
+      initialChildTop = contextMenuLocation == _ContextMenuLocation.none ? targetRect.top - padding.top : targetRect.center.dy - childSize.height + topWidgetHeight;
 
-        maxClampedLeft = screenBounds.right - totalWidth;
-        maxClampedTop = screenBounds.bottom - totalHeight;
-      case Orientation.landscape:
-        final double totalWidth = childSize.width + menuSize.width + menuItemSpacing;
-        final double totalHeightLandscape = topWidgetHeight + math.max(childSize.height, menuSize.height);
-        initialChildLeft = screenBounds.center.dx - totalWidth / 2;
-        initialChildTop = screenBounds.center.dy - totalHeightLandscape / 2 + topWidgetHeight;
-        maxClampedLeft = screenBounds.right - totalWidth;
-        maxClampedTop = screenBounds.bottom - topWidgetHeight;
+      maxClampedLeft = screenBounds.right - totalWidth;
+      maxClampedTop = screenBounds.bottom - totalHeight;
+    } else {
+      final double totalWidth = childSize.width + menuSize.width + menuItemSpacing;
+      final double totalHeightLandscape = topWidgetHeight + math.max(childSize.height, menuSize.height);
+      initialChildLeft = screenBounds.center.dx - totalWidth / 2;
+      initialChildTop = screenBounds.center.dy - totalHeightLandscape / 2 + topWidgetHeight;
+      maxClampedLeft = screenBounds.right - totalWidth;
+      maxClampedTop = screenBounds.bottom - topWidgetHeight;
     }
 
     // Clamp the position to ensure it stays within screen bounds.
@@ -2080,7 +2080,13 @@ class _ContextMenuAlignedChildrenDelegate extends MultiChildLayoutDelegate {
     final double clampedTop = contextMenuLocation == _ContextMenuLocation.none ? initialChildTop : clampDouble(initialChildTop, minTop, math.max(minTop, maxClampedTop));
 
     double alignAndClamp(double childPos, double childSize, double itemSize, double minEdge, double maxEdge) {
-      double alignedPos = childPos;
+      // Determine alignment based on child's position on screen:
+      // if child center is on the right half, right-align; otherwise left-align.
+      final double childCenter = childPos + childSize / 2;
+      final double screenCenter = (minEdge + maxEdge) / 2;
+      final bool alignRight = childCenter > screenCenter;
+
+      double alignedPos = alignRight ? childPos + childSize - itemSize : childPos;
       if (alignedPos + itemSize > maxEdge) {
         alignedPos = childPos + childSize - itemSize;
       }
@@ -2092,8 +2098,7 @@ class _ContextMenuAlignedChildrenDelegate extends MultiChildLayoutDelegate {
       return clampDouble(alignedPos, strictMin, strictMax);
     }
 
-    // Calculate individual positions based on context menu location and orientation
-    if (orientation == Orientation.portrait) {
+    if (usePortraitLayout) {
       final double childLeft = switch (contextMenuLocation) {
         _ContextMenuLocation.left => clampedLeft,
         _ContextMenuLocation.right => clampedLeft + maxWidth - childSize.width,
@@ -2197,15 +2202,62 @@ class _ContextMenuAlignedChildrenDelegate extends MultiChildLayoutDelegate {
           positionChild(_ContextMenuChild.topWidget, Offset(twLeft, topWidgetY));
         }
       } else {
-        // --- Non-none portrait ---
-        final Offset childPosition = Offset(childLeft, clampedTop);
-        final Offset menuPosition = Offset(menuLeft, clampedTop + childSize.height + menuItemSpacing);
+        // --- Non-none portrait: coordinated vertical column ---
+        // Position topWidget, child, and menu as a stacked column with shift
+        // logic to prevent overlap (same approach as .none).
+        final double kPad = _ContextMenuRouteStaticState._kPadding;
+        final double bottomEdge = screenBounds.bottom - kPad;
+        final double topEdge = screenBounds.top + kPad;
 
-        final double clampedMenuLeft = clampDouble(menuPosition.dx, minLeft, math.max(minLeft, screenBounds.right - menuSize.width - _ContextMenuRouteStaticState._kPadding));
-        final double clampedMenuTop = clampDouble(menuPosition.dy, minTop, math.max(minTop, screenBounds.bottom - menuSize.height - _ContextMenuRouteStaticState._kPadding));
+        // Start child at clamped position
+        double childY = clampedTop;
 
-        positionChild(_ContextMenuChild.child, childPosition);
-        positionChild(_ContextMenuChild.menuSheet, Offset(clampedMenuLeft, clampedMenuTop));
+        // Menu always goes below child for non-none portrait.
+        double menuY = childY + childSize.height + menuItemSpacing;
+        double? topWidgetY;
+
+        if (hasTopWidget && topWidgetSize != null) {
+          topWidgetY = childY - topWidgetSize.height - menuItemSpacing;
+          // If topWidget would go off the top, push child (and menu) down.
+          if (topWidgetY < topEdge) {
+            final double shift = topEdge - topWidgetY;
+            topWidgetY = topEdge;
+            childY += shift;
+            menuY += shift;
+          }
+        }
+
+        // Clamp menu to bottom edge.
+        if (menuY + menuSize.height > bottomEdge) {
+          final double overflow = (menuY + menuSize.height) - bottomEdge;
+          // Shift everything up together.
+          menuY -= overflow;
+          childY -= overflow;
+          if (topWidgetY != null) {
+            topWidgetY -= overflow;
+            topWidgetY = math.max(topWidgetY, topEdge);
+          }
+          childY = math.max(childY, topEdge + (topWidgetY != null ? topWidgetSize!.height + menuItemSpacing : 0));
+          menuY = math.max(menuY, childY + childSize.height + menuItemSpacing);
+          menuY = math.min(menuY, bottomEdge - menuSize.height);
+        }
+
+        final double clampedMenuLeft = clampDouble(menuLeft, minLeft, math.max(minLeft, screenBounds.right - menuSize.width - kPad));
+
+        positionChild(_ContextMenuChild.child, Offset(childLeft, childY));
+        positionChild(_ContextMenuChild.menuSheet, Offset(clampedMenuLeft, menuY));
+
+        // Position topWidget inline.
+        if (hasTopWidget && topWidgetSize != null && topWidgetY != null) {
+          final double topWidgetLeft = switch (contextMenuLocation) {
+            _ContextMenuLocation.left => clampedLeft,
+            _ContextMenuLocation.right => clampedLeft + maxWidth - topWidgetSize.width,
+            _ContextMenuLocation.center => clampedLeft + (maxWidth - topWidgetSize.width) / 2,
+            _ContextMenuLocation.none => clampedLeft,
+          };
+          final double clampedTopWidgetLeft = clampDouble(topWidgetLeft, minLeft, math.max(minLeft, screenBounds.right - topWidgetSize.width - kPad));
+          positionChild(_ContextMenuChild.topWidget, Offset(clampedTopWidgetLeft, topWidgetY));
+        }
       }
     } else {
       // Landscape orientation: menu beside child
@@ -2236,32 +2288,10 @@ class _ContextMenuAlignedChildrenDelegate extends MultiChildLayoutDelegate {
     }
 
     // Position top widget above child if it exists.
-    // For none+portrait, topWidget is already positioned inline above.
+    // For portrait-layout, topWidget is already positioned inline above.
     if (hasTopWidget && topWidgetSize != null) {
-      if (orientation == Orientation.portrait && contextMenuLocation == _ContextMenuLocation.none) {
-        // Already positioned in the none-portrait block above — skip.
-      } else if (orientation == Orientation.portrait) {
-        final double topWidgetLeft = switch (contextMenuLocation) {
-          _ContextMenuLocation.left => clampedLeft,
-          _ContextMenuLocation.right => clampedLeft + maxWidth - topWidgetSize.width,
-          _ContextMenuLocation.center => clampedLeft + (maxWidth - topWidgetSize.width) / 2,
-          _ContextMenuLocation.none => clampedLeft, // unreachable — handled above
-        };
-
-        final double topWidgetTopRaw = clampedTop - topWidgetSize.height - menuItemSpacing;
-
-        final double clampedTopWidgetLeft = clampDouble(
-          topWidgetLeft,
-          minLeft,
-          math.max(minLeft, screenBounds.right - topWidgetSize.width - _ContextMenuRouteStaticState._kPadding),
-        );
-        final double clampedTopWidgetTop = clampDouble(
-          topWidgetTopRaw,
-          minTop,
-          math.max(minTop, screenBounds.bottom - topWidgetSize.height - _ContextMenuRouteStaticState._kPadding),
-        );
-
-        positionChild(_ContextMenuChild.topWidget, Offset(clampedTopWidgetLeft, clampedTopWidgetTop));
+      if (usePortraitLayout) {
+        // Already positioned in the portrait block above — skip.
       } else {
         // Landscape: position top widget above child
         final double topWidgetLeft = contextMenuLocation == _ContextMenuLocation.none
