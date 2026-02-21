@@ -2079,6 +2079,19 @@ class _ContextMenuAlignedChildrenDelegate extends MultiChildLayoutDelegate {
     final double clampedLeft = contextMenuLocation == _ContextMenuLocation.none ? initialChildLeft : clampDouble(initialChildLeft, minLeft, math.max(minLeft, maxClampedLeft));
     final double clampedTop = contextMenuLocation == _ContextMenuLocation.none ? initialChildTop : clampDouble(initialChildTop, minTop, math.max(minTop, maxClampedTop));
 
+    double alignAndClamp(double childPos, double childSize, double itemSize, double minEdge, double maxEdge) {
+      double alignedPos = childPos;
+      if (alignedPos + itemSize > maxEdge) {
+        alignedPos = childPos + childSize - itemSize;
+      }
+      if (alignedPos < minEdge) {
+        alignedPos = childPos;
+      }
+      final double strictMin = math.min(minEdge, childPos);
+      final double strictMax = math.max(strictMin, math.max(maxEdge - itemSize, childPos + childSize - itemSize));
+      return clampDouble(alignedPos, strictMin, strictMax);
+    }
+
     // Calculate individual positions based on context menu location and orientation
     if (orientation == Orientation.portrait) {
       final double childLeft = switch (contextMenuLocation) {
@@ -2101,8 +2114,16 @@ class _ContextMenuAlignedChildrenDelegate extends MultiChildLayoutDelegate {
         (contextMenuLocation == _ContextMenuLocation.none ? targetRect.top - paddingTop : clampedTop) + childSize.height + menuItemSpacing,
       );
 
+      final double clampedMenuLeft;
+      if (contextMenuLocation == _ContextMenuLocation.none) {
+        clampedMenuLeft = alignAndClamp(childPosition.dx, childSize.width, menuSize.width, minLeft, screenBounds.right - _ContextMenuRouteStaticState._kPadding);
+      } else {
+        clampedMenuLeft = clampDouble(menuPosition.dx, minLeft, math.max(minLeft, screenBounds.right - menuSize.width - _ContextMenuRouteStaticState._kPadding));
+      }
+      final double clampedMenuTop = clampDouble(menuPosition.dy, minTop, math.max(minTop, screenBounds.bottom - menuSize.height - _ContextMenuRouteStaticState._kPadding));
+
       positionChild(_ContextMenuChild.child, childPosition);
-      positionChild(_ContextMenuChild.menuSheet, menuPosition);
+      positionChild(_ContextMenuChild.menuSheet, Offset(clampedMenuLeft, clampedMenuTop));
     } else {
       // Landscape orientation: menu beside child
       if (contextMenuLocation == _ContextMenuLocation.none) {
@@ -2113,15 +2134,21 @@ class _ContextMenuAlignedChildrenDelegate extends MultiChildLayoutDelegate {
         final bool menuOnRight = rightSpace >= neededSpace;
         final double menuLeft = menuOnRight ? anchoredChildLeft + childSize.width + menuItemSpacing : anchoredChildLeft - menuSize.width - menuItemSpacing;
 
+        final double clampedMenuLeft = clampDouble(menuLeft, minLeft, math.max(minLeft, screenBounds.right - menuSize.width - _ContextMenuRouteStaticState._kPadding));
+        final double clampedMenuTop = alignAndClamp(anchoredChildTop, childSize.height, menuSize.height, minTop, screenBounds.bottom - _ContextMenuRouteStaticState._kPadding);
+
         positionChild(_ContextMenuChild.child, Offset(anchoredChildLeft, anchoredChildTop));
-        positionChild(_ContextMenuChild.menuSheet, Offset(menuLeft, anchoredChildTop));
+        positionChild(_ContextMenuChild.menuSheet, Offset(clampedMenuLeft, clampedMenuTop));
       } else {
         final bool menuOnRight = contextMenuLocation == _ContextMenuLocation.right;
         final Offset childPosition = menuOnRight ? Offset(clampedLeft + menuSize.width + menuItemSpacing, clampedTop) : Offset(clampedLeft, clampedTop);
         final Offset menuPosition = menuOnRight ? Offset(clampedLeft, clampedTop) : Offset(clampedLeft + childSize.width + menuItemSpacing, clampedTop);
 
+        final double clampedMenuLeft = clampDouble(menuPosition.dx, minLeft, math.max(minLeft, screenBounds.right - menuSize.width - _ContextMenuRouteStaticState._kPadding));
+        final double clampedMenuTop = clampDouble(menuPosition.dy, minTop, math.max(minTop, screenBounds.bottom - menuSize.height - _ContextMenuRouteStaticState._kPadding));
+
         positionChild(_ContextMenuChild.child, childPosition);
-        positionChild(_ContextMenuChild.menuSheet, menuPosition);
+        positionChild(_ContextMenuChild.menuSheet, Offset(clampedMenuLeft, clampedMenuTop));
       }
     }
 
@@ -2139,7 +2166,20 @@ class _ContextMenuAlignedChildrenDelegate extends MultiChildLayoutDelegate {
           topWidgetLeft,
           (contextMenuLocation == _ContextMenuLocation.none ? targetRect.top - paddingTop : clampedTop) - topWidgetSize.height - menuItemSpacing,
         );
-        positionChild(_ContextMenuChild.topWidget, topWidgetOffset);
+
+        final double clampedTopWidgetLeft;
+        if (contextMenuLocation == _ContextMenuLocation.none) {
+          clampedTopWidgetLeft = alignAndClamp(topWidgetOffset.dx, childSize.width, topWidgetSize.width, minLeft, screenBounds.right - _ContextMenuRouteStaticState._kPadding);
+        } else {
+          clampedTopWidgetLeft = clampDouble(topWidgetOffset.dx, minLeft, math.max(minLeft, screenBounds.right - topWidgetSize.width - _ContextMenuRouteStaticState._kPadding));
+        }
+        final double clampedTopWidgetTop = clampDouble(
+          topWidgetOffset.dy,
+          minTop,
+          math.max(minTop, screenBounds.bottom - topWidgetSize.height - _ContextMenuRouteStaticState._kPadding),
+        );
+
+        positionChild(_ContextMenuChild.topWidget, Offset(clampedTopWidgetLeft, clampedTopWidgetTop));
       } else {
         // Landscape: position top widget above child
         final double topWidgetLeft = contextMenuLocation == _ContextMenuLocation.none
@@ -2150,7 +2190,15 @@ class _ContextMenuAlignedChildrenDelegate extends MultiChildLayoutDelegate {
             ? targetRect.top - paddingTop - topWidgetSize.height - menuItemSpacing
             : clampedTop - topWidgetSize.height - menuItemSpacing;
 
-        final Offset topWidgetOffset = Offset(topWidgetLeft, topWidgetTop);
+        final double clampedTopWidgetLeft;
+        if (contextMenuLocation == _ContextMenuLocation.none) {
+          clampedTopWidgetLeft = alignAndClamp(topWidgetLeft, childSize.width, topWidgetSize.width, minLeft, screenBounds.right - _ContextMenuRouteStaticState._kPadding);
+        } else {
+          clampedTopWidgetLeft = clampDouble(topWidgetLeft, minLeft, math.max(minLeft, screenBounds.right - topWidgetSize.width - _ContextMenuRouteStaticState._kPadding));
+        }
+        final double clampedTopWidgetTop = clampDouble(topWidgetTop, minTop, math.max(minTop, screenBounds.bottom - topWidgetSize.height - _ContextMenuRouteStaticState._kPadding));
+
+        final Offset topWidgetOffset = Offset(clampedTopWidgetLeft, clampedTopWidgetTop);
         positionChild(_ContextMenuChild.topWidget, topWidgetOffset);
       }
     }
